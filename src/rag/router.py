@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.tools.tavily_search import TavilySearchResults
 # pyrefly: ignore [missing-import]
 from src.utils.helper import load_env
 
@@ -53,7 +54,7 @@ def classify_question(question: str, context: str, video_metadata: dict) -> str:
         return "UNRELATED"
 
 
-# ---------- 2. The "general knowledge" chain (for RELATED_EXTERNAL) ----------
+# ---------- 2. Real web search + answer chain (for RELATED_EXTERNAL) ----------
 
 GENERAL_SYSTEM_PROMPT = """
 You are a helpful assistant answering a question related to a YouTube video's subject.
@@ -61,11 +62,40 @@ You are a helpful assistant answering a question related to a YouTube video's su
 The video is titled "{title}" by {channel}.
 
 The user's question is NOT answered in the video transcript, but it IS related
-to the subject of this video. Answer using your own general knowledge.
-Be accurate and concise. If you're not confident, say so honestly.
+to the subject of this video. Below are live web search results to help you
+answer accurately:
 
-Always start your answer with: "This isn't covered in the video, but here's what I know:"
+---
+{search_context}
+---
+
+Answer the question using the search results above. Be accurate and concise.
+If the search results don't clearly answer it, say so honestly rather than guessing.
+
+Always start your answer with: "This isn't covered in the video, but here's what I found:"
 """
+
+def search_web(question: str, video_metadata: dict) -> str:
+    """
+    Runs a real web search and returns formatted results as a text block.
+    Falls back to an empty string if search fails (e.g. missing/invalid API key).
+    """
+    try:
+        search_tool = TavilySearchResults(max_results=3)
+        query = f"{question} {video_metadata.get('title', '')}"
+        results = search_tool.invoke(query)
+
+        formatted = []
+        for r in results:
+            title = r.get("title", "Untitled")
+            url = r.get("url", "")
+            content = r.get("content", "")[:500]
+            formatted.append(f"Source: {title} ({url})\n{content}")
+
+        return "\n\n".join(formatted)
+    except Exception:
+        return ""
+
 
 def create_general_chain(video_metadata: dict):
     prompt = ChatPromptTemplate.from_messages([
@@ -105,10 +135,18 @@ def get_answer(question: str, retriever, video_metadata: dict, rag_chain):
     if label == "IN_VIDEO":
         answer = rag_chain.invoke(question)
         source = "📄 From the video"
+
     elif label == "RELATED_EXTERNAL":
+        search_context = search_web(question, video_metadata)
+        if not search_context:
+            search_context = "No search results available."
         general_chain = create_general_chain(video_metadata)
-        answer = general_chain.invoke({"question": question})
-        source = "🌐 General knowledge"
+        answer = general_chain.invoke({
+            "question": question,
+            "search_context": search_context
+        })
+        source = "🌐 Web search"
+
     else:
         answer = UNRELATED_RESPONSE
         source = "❌ Not related to video"
