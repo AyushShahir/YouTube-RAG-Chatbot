@@ -4,47 +4,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>YouTube RAG Chatbot</title>
-
+    <title>Transcript RAG — YouTube Video Q&A</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <div class="container">
+    <div class="app">
 
-        <h1>🎥 YouTube RAG Chatbot</h1>
+        <!-- ============ CONSOLE / SIDEBAR ============ -->
+        <aside class="console">
 
-        <div class="video-section">
-
-            <input type="text" id="youtube-url" placeholder="Paste YouTube URL...">
-
-            <button id="process-btn">
-                Process Video
-            </button>
-
-        </div>
-
-        <div id="status"></div>
-
-        <div id="video-container"></div>
-
-        <div class="chat-section">
-
-            <div id="chat-messages"></div>
-
-            <div class="chat-input">
-
-                <input type="text" id="question" placeholder="Ask a question about the video...">
-
-                <button id="ask-btn">
-                    Ask
-                </button>
-
+            <div class="marquee" id="marquee">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
             </div>
 
-        </div>
+            <div class="brand">
+                <div class="brand__mark">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="brand__word">Transcript RAG</div>
+                    <div class="brand__sub">console v1</div>
+                </div>
+            </div>
+
+            <div class="module">
+                <p class="module__label">Cue a video</p>
+                <div class="field">
+                    <input type="text" id="urlInput" placeholder="Paste a YouTube link…" autocomplete="off">
+                </div>
+                <button class="btn btn--amber btn--block" id="loadBtn">Load video</button>
+                <div class="status-line" id="statusLine">
+                    <span class="spinner"></span>
+                    <span id="statusText">Working…</span>
+                </div>
+                <div class="error-note" id="loadError"></div>
+            </div>
+
+            <div class="module">
+                <p class="module__label">Now playing</p>
+                <div class="player-wrap" id="playerWrap">
+                    <div class="player-placeholder">
+                        <div class="glyph"><svg viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                            </svg></div>
+                        <span>No video queued</span>
+                    </div>
+                </div>
+                <div class="video-meta" id="videoMeta" style="display:none;">
+                    <p class="video-meta__title" id="videoTitle">—</p>
+                    <div class="video-meta__channel">
+                        <span class="video-meta__channel-name" id="videoChannel">—</span>
+                        <a class="video-meta__link" id="videoLink" href="#" target="_blank" rel="noopener">open ↗</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="module">
+                <p class="module__label">Under the hood</p>
+                <div class="stat-row">
+                    <span class="stat-row__label">Segments indexed</span>
+                    <span class="stat-row__value is-empty" id="statChunks">—</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-row__label">Embeddings</span>
+                    <span class="stat-row__value">MiniLM-L6-v2</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-row__label">Vector store</span>
+                    <span class="stat-row__value">ChromaDB</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-row__label">LLM</span>
+                    <span class="stat-row__value">Gemini 2.5 Flash</span>
+                </div>
+            </div>
+
+            <div class="console-footer">
+                backend: <span id="apiBaseLabel"></span><br>
+                edit API_BASE at the top of the script tag to point elsewhere.
+            </div>
+
+        </aside>
+
+        <!-- ============ STAGE / CHAT ============ -->
+        <main class="stage">
+
+            <header class="stage-header">
+                <div>
+                    <h1 class="stage-header__title" id="stageTitle">Ask the video anything</h1>
+                    <p class="stage-header__subtitle" id="stageSubtitle">Answers come straight from the transcript — the
+                        model won't wing it.</p>
+                </div>
+                <div class="stage-header__actions">
+                    <button class="btn btn--ghost" id="clearBtn">Clear chat</button>
+                </div>
+            </header>
+
+            <div class="chat-scroll" id="chatScroll">
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-state__mark"><svg viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                        </svg></div>
+                    <h2>No video queued yet</h2>
+                    <p>Paste a link into the console on the left and load it — once it's indexed, ask anything about
+                        what's actually said in it.</p>
+                </div>
+            </div>
+
+            <div class="composer">
+                <form class="composer__row" id="composerForm">
+                    <input type="text" id="questionInput" placeholder="Load a video to start asking…" disabled
+                        autocomplete="off">
+                    <button type="submit" class="send-btn" id="sendBtn" disabled>
+                        <svg viewBox="0 0 24 24">
+                            <path d="M2 21l21-9L2 3v7l15 2-15 2z" />
+                        </svg>
+                    </button>
+                </form>
+                <p class="composer__hint">If it's not in the transcript, the assistant will say so rather than guess.
+                </p>
+            </div>
+
+        </main>
 
     </div>
 
