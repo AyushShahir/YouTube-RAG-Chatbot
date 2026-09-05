@@ -36,8 +36,45 @@ CORS(app)
 # Active RAG session state
 state = {
     "video_id": None,
-    "chain": None
+    "chain": None,
+    "conversation_history": []
 }
+
+
+def add_to_memory(question, answer):
+    """Store the current question and answer in conversation memory."""
+
+    state["conversation_history"].append({
+        "role": "user",
+        "content": question
+    })
+
+    state["conversation_history"].append({
+        "role": "assistant",
+        "content": answer
+    })
+
+
+def format_memory():
+    """Convert conversation history into text for Gemini."""
+
+    if not state["conversation_history"]:
+        return "No previous conversation."
+
+    history = []
+
+    for message in state["conversation_history"]:
+        role = "User" if message["role"] == "user" else "Assistant"
+        history.append(f"{role}: {message['content']}")
+
+    return "\n".join(history)
+
+
+def clear_memory():
+    """Clear conversation memory when a new video is processed."""
+
+    state["conversation_history"] = []
+
 
 
 def extract_video_id(url: str) -> str | None:
@@ -122,19 +159,22 @@ You are an expert YouTube Transcript Question Answering Assistant.
 
 You answer questions using ONLY the transcript context provided.
 
-Follow these rules carefully:
+Use the conversation history only to understand references
+and follow-up questions such as:
+- "What about that?"
+- "Why is it important?"
+- "Who said that?"
+- "Can you explain that further?"
 
-• Use only the transcript.
-• Never invent facts or use external knowledge.
-• When answering factual questions, quote or summarize the relevant transcript.
-• When answering high-level questions (such as "What is this video about?", "Summarize the video", "What is the main topic?", "List the key points"), synthesize information from all relevant transcript passages.
-• The transcript may not literally contain phrases like "main topic" or "summary". Infer these from the overall discussion.
-• If there are multiple themes, identify the primary one and briefly mention secondary topics.
-• If the transcript is insufficient to answer confidently, reply exactly:
+Do NOT use information from the conversation history as factual
+evidence. Factual answers must still come from the transcript.
+
+If the transcript does not contain enough information, reply exactly:
 
 "I couldn't find that information in the video transcript."
 
-Keep answers clear, concise, and faithful to the transcript.
+Conversation history:
+{history}
 
 Transcript:
 {context}
@@ -157,8 +197,11 @@ Transcript:
 
     chain = (
         {
-            "context": retriever | format_docs,
-            "question": RunnablePassthrough(),
+            "context": lambda x: format_docs(
+                retriever.invoke(x["question"])
+            ),
+            "question": lambda x: x["question"],
+            "history": lambda x: x["history"],
         }
         | prompt
         | llm
@@ -166,6 +209,7 @@ Transcript:
     )
 
     return chain
+
 
 
 @app.route("/")
@@ -202,6 +246,9 @@ def process_video():
         state["chain"] = create_rag_chain(retriever)
         state["video_id"] = video_id
 
+        # Start a fresh conversation for the new video
+        clear_memory()
+
         return jsonify({
             "message": "Video processed and indexed successfully!",
             "video_id": video_id
@@ -225,8 +272,18 @@ def ask():
         }), 400
 
     try:
-        answer = state["chain"].invoke(question)
-        return jsonify({"answer": answer})
+        history = format_memory()
+
+        answer = state["chain"].invoke({
+            "question": question,
+            "history": history
+        })
+
+        add_to_memory(question, answer)
+
+        return jsonify({
+            "answer": answer
+        })
     except Exception as e:
         return jsonify({"error": f"Failed to generate answer: {str(e)}"}), 500
 
