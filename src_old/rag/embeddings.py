@@ -2,7 +2,6 @@ import os
 import shutil
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
-# pyrefly: ignore [missing-import]
 from src.utils.helper import get_chroma_dir
 
 def create_vector_store(documents):

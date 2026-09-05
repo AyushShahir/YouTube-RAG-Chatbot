@@ -17,3 +17,4 @@ uv.lock
 # Data and generated artifacts (ChromaDB, transcripts, chunks)
 data/
 src/data/
+

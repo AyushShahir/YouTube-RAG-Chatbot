@@ -1,8 +1,12 @@
 import os
 from dotenv import load_dotenv
 
-# Path calculations relative to this file
-SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+# Path calculations relative to this file.
+# This file lives at: src/utils/helper.py
+# So the true project root is TWO levels up (src/utils -> src -> project root).
+# This file lives at src/utils/helper.py, so true project root is two levels up from SRC_DIR
+UTILS_DIR = os.path.dirname(os.path.abspath(__file__))
+SRC_DIR = os.path.dirname(UTILS_DIR)
 PROJECT_ROOT = os.path.dirname(SRC_DIR)
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 CHROMA_DIR = os.path.join(DATA_DIR, "chroma_db")

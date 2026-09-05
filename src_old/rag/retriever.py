@@ -1,6 +1,5 @@
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
-# pyrefly: ignore [missing-import]
 from src.utils.helper import get_chroma_dir
 
 def load_retriever():

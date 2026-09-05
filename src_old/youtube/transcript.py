@@ -38,11 +38,18 @@ def fetch_transcript(url: str) -> list[dict]:
     
     transcript_data = []
     for snippet in transcript:
-        transcript_data.append({
-            "text": snippet.text,
-            "start": snippet.start,
-            "duration": snippet.duration
-        })
+        if isinstance(snippet, dict):
+            transcript_data.append({
+                "text": snippet.get("text", ""),
+                "start": snippet.get("start", 0),
+                "duration": snippet.get("duration", 0)
+            })
+        else:
+            transcript_data.append({
+                "text": getattr(snippet, "text", str(snippet)),
+                "start": getattr(snippet, "start", 0),
+                "duration": getattr(snippet, "duration", 0)
+            })
         
     return transcript_data
 
