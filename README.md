@@ -1,5 +1,3 @@
-# YouTube RAG Chatbot
-
 # 🎥 YouTube RAG Chatbot
 
 An AI-powered YouTube video assistant that allows users to interact with YouTube videos using **Retrieval-Augmented Generation (RAG)**.
