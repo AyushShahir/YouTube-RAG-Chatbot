@@ -1,43 +1,88 @@
 # YouTube RAG Chatbot
 
-Ask questions about any YouTube video and get answers grounded in its transcript — with automatic fallback to live web search for questions about the video's subject that aren't covered in the transcript itself.
+# 🎥 YouTube RAG Chatbot
 
-## Features
+An AI-powered YouTube video assistant that allows users to interact with YouTube videos using **Retrieval-Augmented Generation (RAG)**.
 
-- 🎥 Paste any YouTube URL to fetch its transcript and metadata automatically
-- 💬 Ask questions in a chat interface; answers are retrieved from the transcript using RAG (Retrieval-Augmented Generation)
-- 🧠 **Smart routing**: questions are automatically classified into one of three categories:
-  - **In video** — answered directly from the transcript
-  - **Related, but not in the video** — answered using live web search (Tavily), since it's still about the video's subject
-  - **Unrelated** — politely declined
-- 📊 Video metadata display (title, channel, views, duration, published date)
-- ✨ Clean, Gemini-inspired chat UI built with Streamlit
+Simply paste a YouTube video URL, process the video, and ask questions about its content. The chatbot retrieves relevant information from the video's transcript and uses **Google Gemini** to generate grounded answers.
 
-## Tech Stack
+The application also maintains conversation memory and provides **timestamp references** alongside relevant information so users can jump back to the corresponding part of the video.
 
-- **Frontend:** Streamlit
-- **LLM:** Google Gemini (`gemini-2.5-flash`) via LangChain
-- **Embeddings:** HuggingFace `sentence-transformers/all-MiniLM-L6-v2` (local, no API cost)
-- **Vector Store:** ChromaDB
-- **Web Search:** Tavily Search API
-- **Transcript Fetching:** `youtube-transcript-api`
+---
 
-## Setup
+## ✨ Features
 
-1. Clone the repo and install dependencies:
-```bash
-   uv sync
-```
-   (or `pip install -e .`)
+### 🎥 YouTube Video Processing
 
-2. Create a `.env` file in the project root with:
+- Paste a YouTube video URL
+- Automatically extract the video ID
+- Retrieve the video's transcript
+- Preserve transcript timing information
+- Process and index the transcript for question answering
 
-## How It Works
+### 🧠 Retrieval-Augmented Generation
 
-1. User submits a YouTube URL → transcript + metadata are fetched
-2. Transcript is chunked and embedded into ChromaDB
-3. On each question, the router:
-   - Retrieves the most relevant transcript chunks
-   - Classifies the question as in-video / related-external / unrelated
-   - Routes to the RAG chain, a web-search-augmented chain, or a refusal accordingly
-4. Answer is displayed in the chat, labeled with its source
+The application follows a RAG pipeline:
+
+1. Transcript extraction
+2. Text chunking
+3. Embedding generation
+4. Vector storage
+5. Semantic retrieval
+6. Context injection
+7. Gemini-powered answer generation
+
+This allows the chatbot to answer questions based on the actual content of the video rather than relying only on the LLM's general knowledge.
+
+### 💬 Conversational Memory
+
+The chatbot supports multi-turn conversations.
+
+For example:
+
+> User: What does the speaker say about AI safety?
+
+> Assistant: The speaker discusses...
+
+> User: Why is that important?
+
+The second question can use the previous conversation to understand what "that" refers to while still grounding the factual answer in the video transcript.
+
+**Memory type:** In-memory conversation history.
+
+The conversation memory is automatically cleared when a new video is processed.
+
+### ⏱️ Timestamp-Aware Answers
+
+Relevant answers can contain timestamps connected to the corresponding part of the video.
+
+For example:
+
+> AI systems can perform extremely well on complex tasks but still make basic mistakes. **[05:50]**
+
+Clicking the timestamp can take the user to the relevant point in the YouTube video.
+
+This makes the answers easier to verify against the original video.
+
+### 🔎 Semantic Retrieval
+
+The project uses vector embeddings to find transcript chunks that are semantically related to the user's question.
+
+This means the user does not have to use the exact words spoken in the video.
+
+For example:
+
+> "What are the problems with current AI systems?"
+
+can retrieve transcript content discussing limitations or inconsistencies of AI systems.
+
+### 🤖 Google Gemini
+
+Google Gemini is used as the language model for generating the final answer.
+
+Current model:
+
+```text
+gemini-2.5-flash
+
+<img width="959" height="431" alt="Screenshot 2026-09-06 215612" src="https://github.com/user-attachments/assets/fb1f98c8-caa7-479a-804a-5798a6d889a1" />
