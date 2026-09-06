@@ -1,27 +1,22 @@
-import os
 import re
-import shutil
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from dotenv import load_dotenv
 
 from youtube_transcript_api import YouTubeTranscriptApi
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
-CHROMA_DIR = DATA_DIR / "chroma_db"
-
 DATA_DIR.mkdir(exist_ok=True)
 
 app = Flask(
@@ -33,48 +28,71 @@ app = Flask(
 
 CORS(app)
 
-# Active RAG session state
-state = {
-    "video_id": None,
-    "chain": None,
-    "conversation_history": []
-}
+
+class AppState:
+    video_id: Optional[str] = None
+    chain: Optional[Any] = None
+    retriever: Optional[Any] = None
+    conversation_history: List[Dict[str, str]] = []
 
 
-def add_to_memory(question, answer):
+state = AppState()
+
+
+def add_to_memory(question: str, answer: str) -> None:
     """Store the current question and answer in conversation memory."""
 
-    state["conversation_history"].append({
+    state.conversation_history.append({
         "role": "user",
         "content": question
     })
 
-    state["conversation_history"].append({
+    state.conversation_history.append({
         "role": "assistant",
         "content": answer
     })
 
 
-def format_memory():
+def format_memory() -> str:
     """Convert conversation history into text for Gemini."""
 
-    if not state["conversation_history"]:
+    if not state.conversation_history:
         return "No previous conversation."
 
     history = []
 
-    for message in state["conversation_history"]:
+    for message in state.conversation_history:
         role = "User" if message["role"] == "user" else "Assistant"
         history.append(f"{role}: {message['content']}")
 
     return "\n".join(history)
 
 
-def clear_memory():
+def clear_memory() -> None:
     """Clear conversation memory when a new video is processed."""
 
-    state["conversation_history"] = []
+    state.conversation_history = []
 
+
+def format_timestamp(seconds: float | int) -> str:
+    """Convert seconds into MM:SS or HH:MM:SS format."""
+
+    total_seconds = int(seconds)
+
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
+
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def create_timestamp_url(video_id: str, seconds: float | int) -> str:
+    """Create a YouTube URL that starts at a specific timestamp."""
+
+    return f"https://www.youtube.com/watch?v={video_id}&t={int(seconds)}s"
 
 
 def extract_video_id(url: str) -> str | None:
@@ -92,7 +110,7 @@ def extract_video_id(url: str) -> str | None:
     return match.group(1)
 
 
-def fetch_transcript(video_id: str):
+def fetch_transcript(video_id: str) -> List[Dict[str, Any]]:
     api = YouTubeTranscriptApi()
     transcript = api.fetch(video_id)
 
@@ -109,55 +127,79 @@ def fetch_transcript(video_id: str):
     return transcript_data
 
 
-def create_chunks(transcript_data):
-    full_transcript = " ".join(item["text"] for item in transcript_data)
+def create_chunks(transcript_data: List[Dict[str, Any]], chunk_size: int = 600) -> List[Document]:
+    """
+    Create transcript chunks while preserving exact timestamp information.
+    Combines transcript items without slicing words mid-character.
+    """
 
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=600,
-        chunk_overlap=100,
-    )
+    documents: List[Document] = []
+    current_items: List[Dict[str, Any]] = []
+    current_length = 0
 
-    text_chunks = splitter.split_text(full_transcript)
+    for item in transcript_data:
+        current_items.append(item)
+        current_length += len(item["text"])
 
-    documents = []
-    for i, chunk in enumerate(text_chunks):
+        if current_length >= chunk_size:
+            chunk_text = " ".join(i["text"] for i in current_items)
+            documents.append(
+                Document(
+                    page_content=chunk_text.strip(),
+                    metadata={
+                        "chunk_id": len(documents),
+                        "start": current_items[0]["start"],
+                        "end": current_items[-1]["start"] + current_items[-1]["duration"]
+                    }
+                )
+            )
+            # Keep last item for context overlap while retaining accurate start timestamp
+            current_items = current_items[-1:]
+            current_length = len(current_items[0]["text"])
+
+    if current_items:
+        chunk_text = " ".join(i["text"] for i in current_items)
         documents.append(
             Document(
-                page_content=chunk,
-                metadata={"chunk_id": i}
+                page_content=chunk_text.strip(),
+                metadata={
+                    "chunk_id": len(documents),
+                    "start": current_items[0]["start"],
+                    "end": current_items[-1]["start"] + current_items[-1]["duration"]
+                }
             )
         )
 
     return documents
 
 
-def create_vector_store(documents):
+def create_vector_store(documents: List[Document]) -> Chroma:
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    if CHROMA_DIR.exists():
-        try:
-            shutil.rmtree(CHROMA_DIR)
-        except Exception:
-            pass
-
-    CHROMA_DIR.mkdir(exist_ok=True)
-
+    # Use in-memory Chroma to prevent file locking issues on Windows
     vector_store = Chroma.from_documents(
         documents=documents,
         embedding=embeddings,
-        persist_directory=str(CHROMA_DIR),
     )
 
     return vector_store
 
 
-def create_rag_chain(retriever):
+def create_rag_chain(retriever: Any) -> Any:
     system_prompt = """
 You are an expert YouTube Transcript Question Answering Assistant.
 
 You answer questions using ONLY the transcript context provided.
+
+CRUCIAL INSTRUCTION FOR TIMESTAMPS:
+Whenever you state a fact, answer a point, or present a topic summary, cite the corresponding timestamp from the transcript inline right after the relevant sentence, formatted strictly as (MM:SS) or (HH:MM:SS) (or (MM:SS - MM:SS) for time ranges).
+Examples:
+- "Scientific Breakthroughs: Hassabis emphasizes fundamental scientific challenges such as fusion energy (2:38)."
+- "Evolution of AI: The discussion then moves toward agentic and multimodal AI systems (14:52)."
+
+Do NOT invent timestamps; use the exact [Timestamp: MM:SS] markers provided in the transcript context below.
 
 Use the conversation history only to understand references
 and follow-up questions such as:
@@ -192,8 +234,13 @@ Transcript:
         temperature=0,
     )
 
-    def format_docs(docs):
-        return "\n\n---\n\n".join(doc.page_content for doc in docs)
+    def format_docs(docs: List[Document]) -> str:
+        formatted_chunks = []
+        for doc in docs:
+            start_sec = doc.metadata.get("start", 0)
+            timestamp_str = format_timestamp(start_sec)
+            formatted_chunks.append(f"[Timestamp: {timestamp_str}]\n{doc.page_content}")
+        return "\n\n---\n\n".join(formatted_chunks)
 
     chain = (
         {
@@ -209,7 +256,6 @@ Transcript:
     )
 
     return chain
-
 
 
 @app.route("/")
@@ -243,15 +289,17 @@ def process_video():
             }
         )
 
-        state["chain"] = create_rag_chain(retriever)
-        state["video_id"] = video_id
+        state.retriever = retriever
+        state.chain = create_rag_chain(retriever)
+        state.video_id = video_id
 
         # Start a fresh conversation for the new video
         clear_memory()
 
         return jsonify({
             "message": "Video processed and indexed successfully!",
-            "video_id": video_id
+            "video_id": video_id,
+            "chunks": len(documents)
         })
 
     except Exception as e:
@@ -266,7 +314,7 @@ def ask():
     if not question:
         return jsonify({"error": "Question is required."}), 400
 
-    if not state.get("chain"):
+    if not state.chain or not state.retriever or not state.video_id:
         return jsonify({
             "error": "No video has been processed yet. Please process a video first."
         }), 400
@@ -274,18 +322,44 @@ def ask():
     try:
         history = format_memory()
 
-        answer = state["chain"].invoke({
+        docs = state.retriever.invoke(question)
+
+        answer = state.chain.invoke({
             "question": question,
             "history": history
         })
 
         add_to_memory(question, answer)
 
+        sources = []
+        if "couldn't find that information" not in str(answer).lower():
+            seen_seconds = set()
+            for doc in docs:
+                start = doc.metadata.get("start")
+                if start is None:
+                    continue
+
+                sec = int(start)
+                if sec not in seen_seconds:
+                    seen_seconds.add(sec)
+                    sources.append({
+                        "timestamp": format_timestamp(sec),
+                        "seconds": sec,
+                        "url": create_timestamp_url(
+                            state.video_id,
+                            sec
+                        )
+                    })
+
         return jsonify({
-            "answer": answer
+            "answer": answer,
+            "sources": sources
         })
+
     except Exception as e:
-        return jsonify({"error": f"Failed to generate answer: {str(e)}"}), 500
+        return jsonify({
+            "error": f"Failed to generate answer: {str(e)}"
+        }), 500
 
 
 if __name__ == "__main__":

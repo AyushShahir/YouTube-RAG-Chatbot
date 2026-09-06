@@ -49,6 +49,93 @@
         return d.innerHTML;
     }
 
+    function formatAnswerWithTimestamps(text) {
+        let safeText = escapeHtml(text);
+
+        // Preserve basic markdown bold formatting & line breaks
+        safeText = safeText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        safeText = safeText.replace(/\n/g, '<br>');
+
+        /*
+         * Match timestamps such as:
+         * (05:50)
+         * (9:15)
+         * (28:27)
+         * (1:02:15)
+         */
+        const timestampRegex = /\((\d{1,2}:)?\d{1,2}:\d{2}\)/g;
+
+        safeText = safeText.replace(timestampRegex, match => {
+            const timestamp = match.slice(1, -1);
+            const seconds = timestampToSeconds(timestamp);
+
+            return `
+                <button
+                    type="button"
+                    class="inline-timestamp"
+                    data-seconds="${seconds}"
+                    title="Jump to ${timestamp}"
+                >
+                    (${timestamp})
+                </button>
+            `;
+        });
+
+        return safeText;
+    }
+
+    function timestampToSeconds(timestamp) {
+        const parts = timestamp.split(':').map(Number);
+
+        if (parts.length === 2) {
+            const [minutes, seconds] = parts;
+            return (minutes * 60) + seconds;
+        }
+
+        if (parts.length === 3) {
+            const [hours, minutes, seconds] = parts;
+            return (hours * 3600) + (minutes * 60) + seconds;
+        }
+
+        return 0;
+    }
+
+    document.addEventListener('click', event => {
+        const timestamp = event.target.closest('.inline-timestamp');
+
+        if (!timestamp) return;
+
+        const seconds = Number(timestamp.dataset.seconds);
+
+        seekYouTubeVideo(seconds);
+    });
+
+    function seekYouTubeVideo(seconds) {
+        const iframe = document.querySelector('.player-wrap iframe');
+
+        if (!iframe) {
+            console.warn('YouTube player not found.');
+            return;
+        }
+
+        iframe.contentWindow.postMessage(
+            JSON.stringify({
+                event: 'command',
+                func: 'seekTo',
+                args: [seconds, true]
+            }),
+            'https://www.youtube.com'
+        );
+
+        iframe.contentWindow.postMessage(
+            JSON.stringify({
+                event: 'command',
+                func: 'playVideo'
+            }),
+            'https://www.youtube.com'
+        );
+    }
+
     const PROGRESS_STEPS = [
         "Pulling the transcript…",
         "Splitting it into chunks…",
@@ -125,7 +212,15 @@
         loadBtn.disabled = false;
 
         // video player
-        playerWrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}" allowfullscreen title="video player"></iframe>`;
+        playerWrap.innerHTML = `
+            <iframe
+                id="youtube-player"
+                src="https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowfullscreen
+                title="video player">
+            </iframe>
+        `;
 
         // metadata (best-effort, via oEmbed)
         if (oembed && oembed.title) {
@@ -141,7 +236,6 @@
         }
         videoLink.href = `https://www.youtube.com/watch?v=${videoId}`;
 
-        // optional stats, only if backend starts returning them
         if (apiResult && typeof apiResult.chunks !== 'undefined') {
             statChunks.textContent = apiResult.chunks;
             statChunks.classList.remove('is-empty');
@@ -230,15 +324,27 @@
     function addAssistantMessage(text, { sources = null, isError = false } = {}) {
         const el = document.createElement('div');
         el.className = 'msg msg--assistant' + (isError ? ' is-error' : '');
-        let sourcesHtml = '';
-        if (sources && sources.length) {
-            sourcesHtml = `<div class="sources">${sources.map(s => `<span class="sources__pill">Chunk ${escapeHtml(String(s))}</span>`).join('')}</div>`;
-        }
+
         el.innerHTML = `
-      <div class="msg__avatar"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
-      <div class="msg__bubble"><p></p>${sourcesHtml}</div>
-    `;
-        el.querySelector('.msg__bubble p').textContent = text;
+            <div class="msg__avatar">
+                <svg viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                </svg>
+            </div>
+
+            <div class="msg__bubble">
+                <p class="assistant-answer"></p>
+            </div>
+        `;
+
+        const answerElement = el.querySelector('.assistant-answer');
+
+        if (isError) {
+            answerElement.textContent = text;
+        } else {
+            answerElement.innerHTML = formatAnswerWithTimestamps(text);
+        }
+
         chatScroll.appendChild(el);
         chatScroll.scrollTop = chatScroll.scrollHeight;
     }
@@ -280,7 +386,6 @@
             renderEmptyChatWithChips();
         } else {
             chatScroll.innerHTML = '';
-            const el = document.getElementById('emptyState') || document.createElement('div');
             chatScroll.innerHTML = `
         <div class="empty-state">
           <div class="empty-state__mark"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
