@@ -28,6 +28,37 @@
 
     let videoLoaded = false;
     let busy = false;
+    let sidebarCollapsed = false;
+
+    // ---- Sidebar toggle ----
+    const consoleEl = document.getElementById('console');
+    const consoleToggle = document.getElementById('consoleToggle');
+    const showSidebarBtn = document.getElementById('showSidebarBtn');
+
+    function collapseSidebar() {
+        sidebarCollapsed = true;
+        consoleEl.classList.add('is-collapsed');
+        consoleToggle.setAttribute('title', 'Show sidebar');
+        consoleToggle.setAttribute('aria-label', 'Show sidebar');
+        if (showSidebarBtn) showSidebarBtn.style.display = '';
+    }
+
+    function expandSidebar() {
+        sidebarCollapsed = false;
+        consoleEl.classList.remove('is-collapsed');
+        consoleToggle.setAttribute('title', 'Hide sidebar');
+        consoleToggle.setAttribute('aria-label', 'Hide sidebar');
+        if (showSidebarBtn) showSidebarBtn.style.display = 'none';
+    }
+
+    consoleToggle.addEventListener('click', () => {
+        if (sidebarCollapsed) expandSidebar();
+        else collapseSidebar();
+    });
+
+    if (showSidebarBtn) {
+        showSidebarBtn.addEventListener('click', () => expandSidebar());
+    }
 
     // one-time marquee chase on load
     requestAnimationFrame(() => {

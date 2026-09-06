@@ -81,6 +81,7 @@ button {
 /* ---------- CONSOLE (SIDEBAR) ---------- */
 
 .console {
+    position: relative;
     width: 360px;
     min-width: 360px;
     background: var(--panel);
@@ -88,13 +89,74 @@ button {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                min-width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.28s ease;
 }
+
+.console.is-collapsed {
+    width: 0;
+    min-width: 0;
+    border-right-color: transparent;
+    overflow: hidden;
+}
+
+.console-toggle {
+    margin-left: auto;
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+
+    background: transparent;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-s);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-faint);
+
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.console-toggle:hover {
+    background: var(--panel-raised);
+    color: var(--text);
+    border-color: var(--text-faint);
+}
+
+.console-toggle svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+}
+
+.console.is-collapsed .console-toggle svg {
+    transform: rotate(180deg);
+}
+
+.console.is-collapsed .console-toggle {
+    right: -28px;
+    border-left: 1px solid var(--hairline);
+}
+
+
 
 .brand {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 20px 22px 16px;
+    padding: 20px 16px 16px 22px;
+    justify-content: space-between;
 }
 
 .brand__mark {

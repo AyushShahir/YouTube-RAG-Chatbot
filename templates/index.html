@@ -18,7 +18,7 @@
     <div class="app">
 
         <!-- ============ CONSOLE / SIDEBAR ============ -->
-        <aside class="console">
+        <aside class="console" id="console">
 
             <div class="marquee" id="marquee">
                 <span></span><span></span><span></span><span></span><span></span>
@@ -35,6 +35,9 @@
                     <div class="brand__word">Transcript RAG</div>
                     <div class="brand__sub">console v1</div>
                 </div>
+                <button class="console-toggle" id="consoleToggle" title="Hide sidebar" aria-label="Toggle sidebar">
+                    <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
             </div>
 
             <div class="module">
@@ -106,6 +109,10 @@
                         model won't wing it.</p>
                 </div>
                 <div class="stage-header__actions">
+                    <button class="btn btn--ghost" id="showSidebarBtn" style="display:none;" title="Show sidebar" aria-label="Show sidebar">
+                        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor;vertical-align:middle;margin-right:4px"><path d="M3 18h18v-2H3zm0-5h18v-2H3zm0-7v2h18V6z"/></svg>
+                        Show sidebar
+                    </button>
                     <button class="btn btn--ghost" id="clearBtn">Clear chat</button>
                 </div>
             </header>
