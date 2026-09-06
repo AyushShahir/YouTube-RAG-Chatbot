@@ -78,9 +78,11 @@ can retrieve transcript content discussing limitations or inconsistencies of AI 
 
 Google Gemini is used as the language model for generating the final answer.
 
+<img width="959" height="431" alt="Screenshot 2026-09-06 215612" src="https://github.com/user-attachments/assets/120c730c-5576-4362-a18e-effb24cca6a8" />
+
+
 Current model:
 
 ```text
 gemini-2.5-flash
 
-<img width="959" height="431" alt="Screenshot 2026-09-06 215612" src="https://github.com/user-attachments/assets/fb1f98c8-caa7-479a-804a-5798a6d889a1" />
