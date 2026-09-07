@@ -112,32 +112,65 @@ def extract_video_id(url: str) -> str | None:
 
 def fetch_transcript(video_id: str) -> List[Dict[str, Any]]:
     api = YouTubeTranscriptApi()
+    transcript = None
 
+    # 1. Try direct fetch with v1 api.fetch or legacy classmethod get_transcript
     try:
-        # First try fetching directly
-        transcript = api.fetch(video_id)
+        if hasattr(api, "fetch"):
+            transcript = api.fetch(video_id)
+        elif hasattr(YouTubeTranscriptApi, "get_transcript"):
+            transcript = YouTubeTranscriptApi.get_transcript(video_id)
     except Exception:
-        # Fallback: list transcripts and find an English or auto-generated one
+        pass
+
+    # 2. If direct fetch failed, try list / list_transcripts fallback
+    if transcript is None:
         try:
-            transcript_list = api.list_transcripts(video_id)
+            if hasattr(api, "list"):
+                transcript_list = api.list(video_id)
+            elif hasattr(api, "list_transcripts"):
+                transcript_list = api.list_transcripts(video_id)
+            elif hasattr(YouTubeTranscriptApi, "list_transcripts"):
+                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            else:
+                raise RuntimeError("No transcript list method found on YouTubeTranscriptApi.")
+
             try:
-                transcript = transcript_list.find_transcript(['en', 'en-US', 'en-GB'])
+                transcript_obj = transcript_list.find_transcript(['en', 'en-US', 'en-GB'])
             except Exception:
-                # If no manual English transcript, try auto-generated or translate to English
-                transcript = transcript_list.find_generated_transcript(['en'])
-            transcript = transcript.fetch()
+                try:
+                    transcript_obj = transcript_list.find_generated_transcript(['en'])
+                except Exception:
+                    # Translate the first available transcript to English
+                    first_t = next(iter(transcript_list))
+                    transcript_obj = first_t.translate('en')
+
+            if hasattr(transcript_obj, "fetch"):
+                transcript = transcript_obj.fetch()
+            else:
+                transcript = transcript_obj
         except Exception as inner_e:
-            raise RuntimeError(f"Could not retrieve transcript for video '{video_id}'. Captions/transcripts might be disabled, unavailable, or in an unsupported language.") from inner_e
+            raise RuntimeError(
+                f"Could not retrieve transcript for video '{video_id}'. Captions/transcripts might be disabled, unavailable, or in an unsupported language."
+            ) from inner_e
 
     transcript_data = []
     for snippet in transcript:
-        transcript_data.append(
-            {
-                "text": snippet.text,
-                "start": snippet.start,
-                "duration": snippet.duration,
-            }
-        )
+        text = getattr(snippet, "text", None) if not isinstance(snippet, dict) else snippet.get("text")
+        start = getattr(snippet, "start", None) if not isinstance(snippet, dict) else snippet.get("start")
+        duration = getattr(snippet, "duration", None) if not isinstance(snippet, dict) else snippet.get("duration")
+
+        if text is not None and start is not None:
+            transcript_data.append(
+                {
+                    "text": text,
+                    "start": start,
+                    "duration": duration or 0,
+                }
+            )
+
+    if not transcript_data:
+        raise RuntimeError(f"Transcript for video '{video_id}' is empty.")
 
     return transcript_data
 
