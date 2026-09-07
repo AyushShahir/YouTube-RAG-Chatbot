@@ -86,3 +86,10 @@ Current model:
 ```text
 gemini-2.5-flash
 
+## ✨ Recent Updates
+
+- Added a **Copy Answer** button for AI responses.
+- Added a **Jump to Latest** button for easier chat navigation.
+- Added clickable **video timestamps** beside relevant answers.
+- Added **conversation memory** for better contextual responses.
+
