@@ -112,7 +112,22 @@ def extract_video_id(url: str) -> str | None:
 
 def fetch_transcript(video_id: str) -> List[Dict[str, Any]]:
     api = YouTubeTranscriptApi()
-    transcript = api.fetch(video_id)
+
+    try:
+        # First try fetching directly
+        transcript = api.fetch(video_id)
+    except Exception:
+        # Fallback: list transcripts and find an English or auto-generated one
+        try:
+            transcript_list = api.list_transcripts(video_id)
+            try:
+                transcript = transcript_list.find_transcript(['en', 'en-US', 'en-GB'])
+            except Exception:
+                # If no manual English transcript, try auto-generated or translate to English
+                transcript = transcript_list.find_generated_transcript(['en'])
+            transcript = transcript.fetch()
+        except Exception as inner_e:
+            raise RuntimeError(f"Could not retrieve transcript for video '{video_id}'. Captions/transcripts might be disabled, unavailable, or in an unsupported language.") from inner_e
 
     transcript_data = []
     for snippet in transcript:

@@ -811,6 +811,122 @@ button {
     margin: 10px 0 4px;
 }
 
+/* ---------- MSG BODY / COPY BUTTON ---------- */
+
+.msg__body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.msg__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 2px;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+
+.msg--assistant:hover .msg__actions,
+.msg--assistant:focus-within .msg__actions {
+    opacity: 1;
+}
+
+.copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-s);
+    color: var(--text-faint);
+    font-size: .72rem;
+    font-family: var(--font-mono);
+    padding: 3px 8px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.copy-btn:hover {
+    color: var(--text-muted);
+    border-color: var(--text-faint);
+    background: var(--panel-raised);
+}
+
+.copy-btn.is-copied {
+    color: var(--teal);
+    border-color: var(--teal-dim);
+}
+
+.copy-btn svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+}
+
+/* ---------- JUMP-TO-LATEST BUTTON ---------- */
+
+.stage {
+    position: relative;
+}
+
+.jump-latest-btn {
+    position: absolute;
+    bottom: 88px;
+    left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    z-index: 10;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    background: var(--panel-raised);
+    border: 1px solid var(--hairline);
+    border-radius: 99px;
+    color: var(--text-muted);
+    font-size: .78rem;
+    font-family: var(--font-body);
+    font-weight: 500;
+    padding: 7px 16px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.22s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.jump-latest-btn.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+.jump-latest-btn:hover {
+    color: var(--text);
+    border-color: var(--amber-dim);
+}
+
+.jump-latest-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+}
+
 /* Marquee chase strip along top of console */
 .marquee {
     display: flex;

@@ -25,10 +25,25 @@
     const sendBtn = document.getElementById('sendBtn');
     const clearBtn = document.getElementById('clearBtn');
     const marquee = document.getElementById('marquee');
+    const jumpLatestBtn = document.getElementById('jumpLatestBtn');
 
     let videoLoaded = false;
     let busy = false;
     let sidebarCollapsed = false;
+
+    // ---- Jump-to-latest button ----
+    chatScroll.addEventListener('scroll', () => {
+        const distFromBottom = chatScroll.scrollHeight - chatScroll.scrollTop - chatScroll.clientHeight;
+        if (distFromBottom > 100) {
+            jumpLatestBtn.classList.add('is-visible');
+        } else {
+            jumpLatestBtn.classList.remove('is-visible');
+        }
+    });
+
+    jumpLatestBtn.addEventListener('click', () => {
+        chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: 'smooth' });
+    });
 
     // ---- Sidebar toggle ----
     const consoleEl = document.getElementById('console');
@@ -363,8 +378,23 @@
                 </svg>
             </div>
 
-            <div class="msg__bubble">
-                <p class="assistant-answer"></p>
+            <div class="msg__body">
+                <div class="msg__bubble">
+                    <p class="assistant-answer"></p>
+                </div>
+                ${isError ? '' : `
+                <div class="msg__actions">
+                    <button type="button" class="copy-btn" title="Copy answer" aria-label="Copy answer">
+                        <svg viewBox="0 0 24 24" class="copy-icon">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        <svg viewBox="0 0 24 24" class="check-icon" style="display:none">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        <span class="copy-btn__label">Copy</span>
+                    </button>
+                </div>`}
             </div>
         `;
 
@@ -374,6 +404,26 @@
             answerElement.textContent = text;
         } else {
             answerElement.innerHTML = formatAnswerWithTimestamps(text);
+
+            // Wire up copy button
+            const copyBtn = el.querySelector('.copy-btn');
+            const copyIcon = el.querySelector('.copy-icon');
+            const checkIcon = el.querySelector('.check-icon');
+            const copyLabel = el.querySelector('.copy-btn__label');
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(text).then(() => {
+                    copyIcon.style.display = 'none';
+                    checkIcon.style.display = '';
+                    copyLabel.textContent = 'Copied!';
+                    copyBtn.classList.add('is-copied');
+                    setTimeout(() => {
+                        copyIcon.style.display = '';
+                        checkIcon.style.display = 'none';
+                        copyLabel.textContent = 'Copy';
+                        copyBtn.classList.remove('is-copied');
+                    }, 2000);
+                });
+            });
         }
 
         chatScroll.appendChild(el);
