@@ -476,4 +476,92 @@
       `;
         }
     });
+
+// ===============================
+// AI RESPONSE LOADING INDICATOR
+// ===============================
+let activeRequests = 0;
+
+function showLoadingIndicator() {
+    let loader = document.getElementById("ai-loading-indicator");
+
+    if (!loader) {
+        loader = document.createElement("div");
+        loader.id = "ai-loading-indicator";
+
+        loader.innerHTML = `
+            <div class="ai-loader-spinner"></div>
+            <span>Thinking...</span>
+        `;
+
+        document.body.appendChild(loader);
+
+        const style = document.createElement("style");
+
+        style.textContent = `
+            #ai-loading-indicator {
+                position: fixed;
+                bottom: 25px;
+                left: 50%;
+                transform: translateX(-50%);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 18px;
+                background: rgba(25, 25, 25, 0.95);
+                color: white;
+                border-radius: 20px;
+                font-size: 14px;
+                z-index: 9999;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+            }
+
+            .ai-loader-spinner {
+                width: 14px;
+                height: 14px;
+                border: 2px solid rgba(255, 255, 255, 0.3);
+                border-top-color: white;
+                border-radius: 50%;
+                animation: ai-loader-spin 0.8s linear infinite;
+            }
+
+            @keyframes ai-loader-spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+        `;
+
+        document.head.appendChild(style);
+    }
+
+    loader.style.display = "flex";
+}
+
+function hideLoadingIndicator() {
+    const loader = document.getElementById("ai-loading-indicator");
+
+    if (loader) {
+        loader.style.display = "none";
+    }
+}
+
+// Intercept frontend API requests
+const originalFetch = window.fetch;
+
+window.fetch = async function (...args) {
+    activeRequests++;
+
+    showLoadingIndicator();
+
+    try {
+        return await originalFetch.apply(this, args);
+    } finally {
+        activeRequests--;
+
+        if (activeRequests === 0) {
+            hideLoadingIndicator();
+        }
+    }
+};
 })();
