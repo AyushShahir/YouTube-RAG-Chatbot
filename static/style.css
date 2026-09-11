@@ -18,6 +18,51 @@
     --font-mono: 'IBM Plex Mono', monospace;
 }
 
+[data-theme="light"] {
+    --void: #f5f4ef;
+    --panel: #ffffff;
+    --panel-raised: #e9e7e0;
+    --hairline: #d8d3c8;
+    --text: #1c1917;
+    --text-muted: #665f56;
+    --text-faint: #948c82;
+    --amber: #d97706;
+    --amber-dim: #fef3c7;
+    --teal: #0d9488;
+    --teal-dim: #ccfbf1;
+    --rust: #b91c1c;
+}
+
+[data-theme="light"] .msg--user .msg__bubble {
+    background: var(--teal);
+    color: #ffffff;
+}
+
+[data-theme="light"] .msg--user .msg__avatar {
+    background: #0f766e;
+}
+
+[data-theme="light"] .btn--amber {
+    background: var(--amber);
+    color: #ffffff;
+}
+
+[data-theme="light"] .send-btn {
+    background: var(--amber);
+}
+
+[data-theme="light"] .send-btn svg {
+    fill: #ffffff;
+}
+
+[data-theme="light"] .brand__mark {
+    background: var(--amber);
+}
+
+[data-theme="light"] .brand__mark svg {
+    fill: #ffffff;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -381,35 +426,106 @@ button {
 }
 
 .video-meta {
-    margin-top: 12px;
+    margin-top: 14px;
+}
+
+.video-meta__card {
+    display: flex;
+    gap: 12px;
+    background: var(--panel-raised);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-m);
+    padding: 10px;
+    align-items: flex-start;
+    transition: border-color 0.2s ease;
+}
+
+.video-meta__card:hover {
+    border-color: var(--amber-dim);
+}
+
+.video-meta__thumb-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 108px;
+    aspect-ratio: 16/9;
+    border-radius: var(--radius-s);
+    overflow: hidden;
+    background: #000;
+    border: 1px solid var(--hairline);
+}
+
+.video-meta__thumbnail {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.video-meta__duration-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    background: rgba(18, 17, 16, 0.88);
+    backdrop-filter: blur(4px);
+    color: var(--amber);
+    font-family: var(--font-mono);
+    font-size: .68rem;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid rgba(227, 165, 72, 0.35);
+    line-height: 1.3;
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.video-meta__content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .video-meta__title {
     font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 1.15rem;
-    line-height: 1.15;
-    margin: 0 0 6px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    line-height: 1.2;
+    color: var(--text);
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
 }
 
 .video-meta__channel {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
+    margin-top: 2px;
 }
 
 .video-meta__channel-name {
-    font-size: .82rem;
+    font-size: .78rem;
     color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .video-meta__link {
-    font-size: .75rem;
+    font-size: .72rem;
     color: var(--text-faint);
     text-decoration: none;
     font-family: var(--font-mono);
     border-bottom: 1px dotted var(--text-faint);
+    flex-shrink: 0;
+    transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .video-meta__link:hover {
@@ -660,6 +776,40 @@ button {
     border: 1px solid var(--hairline);
     padding: 2px 8px;
     border-radius: 99px;
+}
+
+.msg__followups {
+    margin-top: 12px;
+}
+
+.msg__followups-label {
+    display: block;
+    font-size: .72rem;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.chips--inline {
+    margin: 0;
+    justify-content: flex-start;
+    gap: 6px;
+}
+
+.chip--followup {
+    font-size: .78rem;
+    padding: 6px 12px;
+    background: var(--panel-raised);
+    border: 1px solid var(--hairline);
+    transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+
+.chip--followup:hover {
+    border-color: var(--amber);
+    color: var(--text);
+    background: var(--panel);
 }
 
 .inline-timestamp {

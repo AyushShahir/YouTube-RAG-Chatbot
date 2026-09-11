@@ -11,8 +11,10 @@
 
     const playerWrap = document.getElementById('playerWrap');
     const videoMeta = document.getElementById('videoMeta');
+    const videoThumb = document.getElementById('videoThumb');
     const videoTitle = document.getElementById('videoTitle');
     const videoChannel = document.getElementById('videoChannel');
+    const videoDuration = document.getElementById('videoDuration');
     const videoLink = document.getElementById('videoLink');
     const statChunks = document.getElementById('statChunks');
 
@@ -73,6 +75,36 @@
 
     if (showSidebarBtn) {
         showSidebarBtn.addEventListener('click', () => expandSidebar());
+    }
+
+    // ---- Theme toggle ----
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeToggleLabel = document.getElementById('themeToggleLabel');
+    const sunIcon = themeToggleBtn ? themeToggleBtn.querySelector('.sun-icon') : null;
+    const moonIcon = themeToggleBtn ? themeToggleBtn.querySelector('.moon-icon') : null;
+
+    function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        if (theme === 'light') {
+            if (themeToggleLabel) themeToggleLabel.textContent = 'Dark mode';
+            if (sunIcon) sunIcon.style.display = 'none';
+            if (moonIcon) moonIcon.style.display = '';
+        } else {
+            if (themeToggleLabel) themeToggleLabel.textContent = 'Light mode';
+            if (sunIcon) sunIcon.style.display = '';
+            if (moonIcon) moonIcon.style.display = 'none';
+        }
+    }
+
+    const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    setTheme(savedTheme);
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            setTheme(currentTheme === 'light' ? 'dark' : 'light');
+        });
     }
 
     // one-time marquee chase on load
@@ -199,6 +231,86 @@
         return () => { clearInterval(id); statusLine.classList.remove('is-visible'); };
     }
 
+    function formatSecondsToMMSS(seconds) {
+        if (!seconds || isNaN(seconds) || seconds <= 0) return '';
+        const totalSec = Math.floor(seconds);
+        const hrs = Math.floor(totalSec / 3600);
+        const mins = Math.floor((totalSec % 3600) / 60);
+        const secs = totalSec % 60;
+        if (hrs > 0) {
+            return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function loadYTPlayerApi() {
+        if (window.YT && window.YT.Player) return;
+        if (!document.getElementById('yt-iframe-api')) {
+            const tag = document.createElement('script');
+            tag.id = 'yt-iframe-api';
+            tag.src = "https://www.youtube.com/iframe_api";
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        }
+    }
+
+    function setDurationBadge(seconds) {
+        const formatted = formatSecondsToMMSS(seconds);
+        if (formatted && videoDuration) {
+            videoDuration.textContent = formatted;
+            videoDuration.style.display = 'inline-block';
+        }
+    }
+
+    function fetchVideoDuration(videoId) {
+        loadYTPlayerApi();
+
+        if (videoDuration) {
+            videoDuration.style.display = 'none';
+            videoDuration.textContent = '';
+        }
+
+        let attempts = 0;
+        const maxAttempts = 30;
+
+        function checkPlayer() {
+            if (window.YT && window.YT.Player) {
+                try {
+                    const ytPlayer = new YT.Player('youtube-player', {
+                        events: {
+                            'onReady': (event) => {
+                                const dur = event.target.getDuration();
+                                if (dur > 0) setDurationBadge(dur);
+                            },
+                            'onStateChange': (event) => {
+                                const dur = event.target.getDuration();
+                                if (dur > 0) setDurationBadge(dur);
+                            }
+                        }
+                    });
+
+                    const pollId = setInterval(() => {
+                        if (ytPlayer && typeof ytPlayer.getDuration === 'function') {
+                            const dur = ytPlayer.getDuration();
+                            if (dur > 0) {
+                                setDurationBadge(dur);
+                                clearInterval(pollId);
+                            }
+                        }
+                    }, 300);
+                    setTimeout(() => clearInterval(pollId), 8000);
+                } catch (e) {
+                    console.warn("Could not bind YT.Player for duration", e);
+                }
+            } else if (attempts < maxAttempts) {
+                attempts++;
+                setTimeout(checkPlayer, 200);
+            }
+        }
+
+        checkPlayer();
+    }
+
     async function fetchOEmbed(url) {
         try {
             const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
@@ -268,23 +380,41 @@
             </iframe>
         `;
 
-        // metadata (best-effort, via oEmbed)
-        if (oembed && oembed.title) {
-            videoTitle.textContent = oembed.title;
-            videoChannel.textContent = oembed.author_name || '—';
-            videoMeta.style.display = 'block';
-            stageTitle.textContent = oembed.title;
-            stageSubtitle.textContent = `Ask anything about what's actually said in this video.`;
-        } else {
-            videoMeta.style.display = 'none';
-            stageTitle.textContent = 'Ask the video anything';
-            stageSubtitle.textContent = `Answers come straight from the transcript — the model won't wing it.`;
+        // metadata (title, thumbnail, channel, duration)
+        const thumbUrl = (oembed && oembed.thumbnail_url)
+            ? oembed.thumbnail_url
+            : `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+        if (videoThumb) {
+            videoThumb.src = thumbUrl;
+            videoThumb.onerror = () => {
+                videoThumb.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+            };
         }
+
+        const titleText = (oembed && oembed.title) ? oembed.title : `YouTube Video (${videoId})`;
+        const channelText = (oembed && oembed.author_name) ? oembed.author_name : 'YouTube';
+
+        if (videoTitle) videoTitle.textContent = titleText;
+        if (videoChannel) videoChannel.textContent = channelText;
+        if (videoMeta) videoMeta.style.display = 'block';
+
+        stageTitle.textContent = titleText;
+        stageSubtitle.textContent = `Ask anything about what's actually said in this video.`;
         videoLink.href = `https://www.youtube.com/watch?v=${videoId}`;
+
+        // Fetch duration via frontend YouTube Player API
+        fetchVideoDuration(videoId);
 
         if (apiResult && typeof apiResult.chunks !== 'undefined') {
             statChunks.textContent = apiResult.chunks;
             statChunks.classList.remove('is-empty');
+        }
+
+        if (apiResult && apiResult.suggested_questions && apiResult.suggested_questions.length > 0) {
+            currentSuggestedQuestions = apiResult.suggested_questions;
+        } else {
+            currentSuggestedQuestions = DEFAULT_SUGGESTIONS;
         }
 
         videoLoaded = true;
@@ -292,7 +422,7 @@
         sendBtn.disabled = false;
         questionInput.placeholder = "Ask a question about the video…";
 
-        renderEmptyChatWithChips();
+        renderEmptyChatWithChips(currentSuggestedQuestions);
     }
 
     function showLoadError(err) {
@@ -303,23 +433,24 @@
     loadBtn.addEventListener('click', loadVideo);
     urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadVideo(); });
 
-    const SUGGESTIONS = [
+    const DEFAULT_SUGGESTIONS = [
         "Summarize this video in a few sentences",
         "What's the main argument here?",
         "What are the key takeaways?",
         "Is anything surprising or counterintuitive mentioned?"
     ];
+    let currentSuggestedQuestions = DEFAULT_SUGGESTIONS;
 
-    function renderEmptyChatWithChips() {
+    function renderEmptyChatWithChips(questions = currentSuggestedQuestions) {
         chatScroll.innerHTML = '';
         const wrap = document.createElement('div');
         wrap.className = 'empty-state';
         wrap.innerHTML = `
       <div class="empty-state__mark"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
       <h2>Ready when you are</h2>
-      <p>The transcript is indexed. Ask a specific question, or try one of these:</p>
+      <p>The transcript is indexed. Ask a specific question, or try one of these suggestions:</p>
       <div class="chips">
-        ${SUGGESTIONS.map(s => `<button type="button" class="chip">${escapeHtml(s)}</button>`).join('')}
+        ${questions.map(s => `<button type="button" class="chip">${escapeHtml(s)}</button>`).join('')}
       </div>
     `;
         chatScroll.appendChild(wrap);
@@ -367,7 +498,7 @@
         if (el) el.remove();
     }
 
-    function addAssistantMessage(text, { sources = null, isError = false } = {}) {
+    function addAssistantMessage(text, { sources = null, followupQuestions = null, isError = false } = {}) {
         const el = document.createElement('div');
         el.className = 'msg msg--assistant' + (isError ? ' is-error' : '');
 
@@ -424,6 +555,26 @@
                     }, 2000);
                 });
             });
+
+            if (followupQuestions && followupQuestions.length > 0) {
+                const msgBody = el.querySelector('.msg__body');
+                const followupsEl = document.createElement('div');
+                followupsEl.className = 'msg__followups';
+                followupsEl.innerHTML = `
+                    <span class="msg__followups-label">Suggested follow-ups</span>
+                    <div class="chips chips--inline">
+                        ${followupQuestions.map(q => `<button type="button" class="chip chip--followup">${escapeHtml(q)}</button>`).join('')}
+                    </div>
+                `;
+                msgBody.appendChild(followupsEl);
+
+                followupsEl.querySelectorAll('.chip--followup').forEach(chip => {
+                    chip.addEventListener('click', () => {
+                        questionInput.value = chip.textContent;
+                        composerForm.requestSubmit();
+                    });
+                });
+            }
         }
 
         chatScroll.appendChild(el);
@@ -451,7 +602,10 @@
             const data = await res.json().catch(() => ({}));
             removeThinking();
             if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-            addAssistantMessage(data.answer, { sources: data.sources });
+            addAssistantMessage(data.answer, {
+                sources: data.sources,
+                followupQuestions: data.followup_questions || []
+            });
         } catch (err) {
             removeThinking();
             addAssistantMessage(`Sorry, something went wrong: ${err.message || err}`, { isError: true });

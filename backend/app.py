@@ -155,6 +155,7 @@ def fetch_transcript(video_id: str) -> List[Dict[str, Any]]:
             ) from inner_e
 
     transcript_data = []
+    # pyrefly: ignore [not-iterable]
     for snippet in transcript:
         text = getattr(snippet, "text", None) if not isinstance(snippet, dict) else snippet.get("text")
         start = getattr(snippet, "start", None) if not isinstance(snippet, dict) else snippet.get("start")
@@ -311,6 +312,52 @@ def index():
     return render_template("index.html")
 
 
+def generate_suggested_questions(transcript_data: List[Dict[str, Any]]) -> List[str]:
+    """Generate 3-4 starter questions based on the video transcript."""
+    try:
+        # Take an excerpt from transcript (first ~40 snippets up to 3000 chars)
+        sample_text = " ".join([item["text"] for item in transcript_data[:40]])[:3000]
+
+        prompt = ChatPromptTemplate.from_template(
+            "You are an assistant preparing a video Q&A session. "
+            "Based on the following excerpt from a video transcript, generate 3 or 4 short, compelling starter questions "
+            "that a user might want to ask about this specific video content.\n\n"
+            "Rules:\n"
+            "- Make each question concise and natural (max 10-12 words).\n"
+            "- Base them directly on key themes or facts in the transcript.\n"
+            "- Return ONLY a bulleted list starting with '- ' for each question, nothing else.\n\n"
+            "Transcript Excerpt:\n{text}"
+        )
+
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            temperature=0.3,
+        )
+
+        chain = prompt | llm | StrOutputParser()
+        raw_output = chain.invoke({"text": sample_text})
+
+        questions = []
+        for line in raw_output.strip().split("\n"):
+            line = line.strip()
+            if line.startswith("-") or line.startswith("*") or (len(line) > 2 and line[0].isdigit() and line[1] in [".", ")"]):
+                q = line.lstrip("-*0123456789. )").strip()
+                if q:
+                    questions.append(q)
+
+        if len(questions) >= 3:
+            return questions[:4]
+    except Exception as e:
+        print(f"Failed to generate suggested questions: {e}")
+
+    return [
+        "Summarize this video in a few sentences",
+        "What's the main argument here?",
+        "What are the key takeaways?",
+        "Is anything surprising or counterintuitive mentioned?"
+    ]
+
+
 @app.route("/process-video", methods=["POST"])
 def process_video():
     data = request.get_json() or {}
@@ -344,14 +391,53 @@ def process_video():
         # Start a fresh conversation for the new video
         clear_memory()
 
+        suggested_questions = generate_suggested_questions(transcript_data)
+
         return jsonify({
             "message": "Video processed and indexed successfully!",
             "video_id": video_id,
-            "chunks": len(documents)
+            "chunks": len(documents),
+            "suggested_questions": suggested_questions
         })
 
     except Exception as e:
         return jsonify({"error": f"Failed to process video: {str(e)}"}), 500
+
+
+def generate_followup_questions(question: str, answer: str) -> List[str]:
+    """Generate 2-3 logical follow-up questions based on the question and answer."""
+    if "couldn't find that information" in answer.lower():
+        return []
+    try:
+        prompt = ChatPromptTemplate.from_template(
+            "Given a user's question about a YouTube video and the AI assistant's answer:\n"
+            "Question: {question}\n"
+            "Answer: {answer}\n\n"
+            "Generate 2 or 3 natural, concise follow-up questions (max 10-12 words each) that the user might want to ask next to explore the topic deeper.\n"
+            "Rules:\n"
+            "- Return ONLY a bulleted list starting with '- ' for each question, nothing else."
+        )
+
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            temperature=0.4,
+        )
+
+        chain = prompt | llm | StrOutputParser()
+        raw_output = chain.invoke({"question": question, "answer": answer})
+
+        questions = []
+        for line in raw_output.strip().split("\n"):
+            line = line.strip()
+            if line.startswith("-") or line.startswith("*") or (len(line) > 2 and line[0].isdigit() and line[1] in [".", ")"]):
+                q = line.lstrip("-*0123456789. )").strip()
+                if q:
+                    questions.append(q)
+
+        return questions[:3]
+    except Exception as e:
+        print(f"Failed to generate follow-up questions: {e}")
+        return []
 
 
 @app.route("/ask", methods=["POST"])
@@ -399,9 +485,12 @@ def ask():
                         )
                     })
 
+        followup_questions = generate_followup_questions(question, answer)
+
         return jsonify({
             "answer": answer,
-            "sources": sources
+            "sources": sources,
+            "followup_questions": followup_questions
         })
 
     except Exception as e:
@@ -414,5 +503,6 @@ if __name__ == "__main__":
     app.run(
         host="127.0.0.1",
         port=5000,
-        debug=True
+        debug=True,
+        use_reloader=False
     )
