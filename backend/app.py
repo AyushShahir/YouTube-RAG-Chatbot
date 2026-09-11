@@ -178,8 +178,8 @@ def fetch_transcript(video_id: str) -> List[Dict[str, Any]]:
 
 def create_chunks(transcript_data: List[Dict[str, Any]], chunk_size: int = 600) -> List[Document]:
     """
-    Create transcript chunks while preserving exact timestamp information.
-    Combines transcript items without slicing words mid-character.
+    Create transcript chunks with sentence-level timestamp markers
+    to prevent timestamp shift across long chunks.
     """
 
     documents: List[Document] = []
@@ -191,7 +191,11 @@ def create_chunks(transcript_data: List[Dict[str, Any]], chunk_size: int = 600) 
         current_length += len(item["text"])
 
         if current_length >= chunk_size:
-            chunk_text = " ".join(i["text"] for i in current_items)
+            chunk_parts = [
+                f"[{format_timestamp(i['start'])}] {i['text'].strip()}"
+                for i in current_items
+            ]
+            chunk_text = " ".join(chunk_parts)
             documents.append(
                 Document(
                     page_content=chunk_text.strip(),
@@ -207,7 +211,11 @@ def create_chunks(transcript_data: List[Dict[str, Any]], chunk_size: int = 600) 
             current_length = len(current_items[0]["text"])
 
     if current_items:
-        chunk_text = " ".join(i["text"] for i in current_items)
+        chunk_parts = [
+            f"[{format_timestamp(i['start'])}] {i['text'].strip()}"
+            for i in current_items
+        ]
+        chunk_text = " ".join(chunk_parts)
         documents.append(
             Document(
                 page_content=chunk_text.strip(),
@@ -248,7 +256,7 @@ Examples:
 - "Scientific Breakthroughs: Hassabis emphasizes fundamental scientific challenges such as fusion energy (2:38)."
 - "Evolution of AI: The discussion then moves toward agentic and multimodal AI systems (14:52)."
 
-Do NOT invent timestamps; use the exact [Timestamp: MM:SS] markers provided in the transcript context below.
+Do NOT invent timestamps; use the exact [MM:SS] or [HH:MM:SS] markers attached to each sentence in the transcript context below.
 
 Use the conversation history only to understand references
 and follow-up questions such as:
@@ -284,12 +292,7 @@ Transcript:
     )
 
     def format_docs(docs: List[Document]) -> str:
-        formatted_chunks = []
-        for doc in docs:
-            start_sec = doc.metadata.get("start", 0)
-            timestamp_str = format_timestamp(start_sec)
-            formatted_chunks.append(f"[Timestamp: {timestamp_str}]\n{doc.page_content}")
-        return "\n\n---\n\n".join(formatted_chunks)
+        return "\n\n---\n\n".join(doc.page_content for doc in docs)
 
     chain = (
         {
@@ -313,48 +316,12 @@ def index():
 
 
 def generate_suggested_questions(transcript_data: List[Dict[str, Any]]) -> List[str]:
-    """Generate 3-4 starter questions based on the video transcript."""
-    try:
-        # Take an excerpt from transcript (first ~40 snippets up to 3000 chars)
-        sample_text = " ".join([item["text"] for item in transcript_data[:40]])[:3000]
-
-        prompt = ChatPromptTemplate.from_template(
-            "You are an assistant preparing a video Q&A session. "
-            "Based on the following excerpt from a video transcript, generate 3 or 4 short, compelling starter questions "
-            "that a user might want to ask about this specific video content.\n\n"
-            "Rules:\n"
-            "- Make each question concise and natural (max 10-12 words).\n"
-            "- Base them directly on key themes or facts in the transcript.\n"
-            "- Return ONLY a bulleted list starting with '- ' for each question, nothing else.\n\n"
-            "Transcript Excerpt:\n{text}"
-        )
-
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0.3,
-        )
-
-        chain = prompt | llm | StrOutputParser()
-        raw_output = chain.invoke({"text": sample_text})
-
-        questions = []
-        for line in raw_output.strip().split("\n"):
-            line = line.strip()
-            if line.startswith("-") or line.startswith("*") or (len(line) > 2 and line[0].isdigit() and line[1] in [".", ")"]):
-                q = line.lstrip("-*0123456789. )").strip()
-                if q:
-                    questions.append(q)
-
-        if len(questions) >= 3:
-            return questions[:4]
-    except Exception as e:
-        print(f"Failed to generate suggested questions: {e}")
-
+    """Generate high-value summary and takeaway starter questions for the loaded video."""
     return [
         "Summarize this video in a few sentences",
-        "What's the main argument here?",
-        "What are the key takeaways?",
-        "Is anything surprising or counterintuitive mentioned?"
+        "What are the key takeaways of this video?",
+        "What is the main argument presented in this video?",
+        "What key topics and insights are covered here?"
     ]
 
 

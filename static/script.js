@@ -135,26 +135,28 @@
         safeText = safeText.replace(/\n/g, '<br>');
 
         /*
-         * Match timestamps such as:
+         * Match single timestamps and time ranges such as:
          * (05:50)
          * (9:15)
-         * (28:27)
          * (1:02:15)
+         * (05:50 - 06:15)
+         * (5:50 - 6:15)
          */
-        const timestampRegex = /\((\d{1,2}:)?\d{1,2}:\d{2}\)/g;
+        const timestampRegex = /\((?:(?:\d{1,2}:)?\d{1,2}:\d{1,2})(?:\s*-\s*(?:(?:\d{1,2}:)?\d{1,2}:\d{1,2}))?\)/g;
 
         safeText = safeText.replace(timestampRegex, match => {
-            const timestamp = match.slice(1, -1);
-            const seconds = timestampToSeconds(timestamp);
+            const rawInside = match.slice(1, -1).trim();
+            const firstTimestamp = rawInside.split('-')[0].trim();
+            const seconds = timestampToSeconds(firstTimestamp);
 
             return `
                 <button
                     type="button"
                     class="inline-timestamp"
                     data-seconds="${seconds}"
-                    title="Jump to ${timestamp}"
+                    title="Jump to ${firstTimestamp}"
                 >
-                    (${timestamp})
+                    (${rawInside})
                 </button>
             `;
         });
@@ -435,9 +437,9 @@
 
     const DEFAULT_SUGGESTIONS = [
         "Summarize this video in a few sentences",
-        "What's the main argument here?",
-        "What are the key takeaways?",
-        "Is anything surprising or counterintuitive mentioned?"
+        "What are the key takeaways of this video?",
+        "What is the main argument presented in this video?",
+        "What key topics and insights are covered here?"
     ];
     let currentSuggestedQuestions = DEFAULT_SUGGESTIONS;
 
