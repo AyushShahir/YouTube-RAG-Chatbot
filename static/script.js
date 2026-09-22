@@ -500,6 +500,68 @@
         if (el) el.remove();
     }
 
+    // ---- Translation helper ----
+    const LANG_OPTIONS = [
+        { code: 'en',  label: 'EN',      full: 'English'  },
+        { code: 'hi',  label: 'हिंदी',   full: 'Hindi'    },
+        { code: 'mr',  label: 'मराठी',   full: 'Marathi'  },
+    ];
+
+    async function translateChunk(chunk, targetLang) {
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|${targetLang}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data && data.responseData && data.responseData.translatedText) {
+            const t = data.responseData.translatedText;
+            // MyMemory echoes the query back untranslated when limit is hit
+            if (t.toUpperCase().includes('QUERY LENGTH LIMIT')) return chunk;
+            return t;
+        }
+        return chunk;
+    }
+
+    async function translateText(text, targetLang) {
+        if (targetLang === 'en') return text;
+        try {
+            const MAX = 490; // stay safely under the 500-char API limit
+
+            // Split on sentence-ending punctuation or newlines, keeping delimiters
+            const sentences = text.match(/[^.!?\n]+[.!?\n]*/g) || [text];
+
+            const chunks = [];
+            let current = '';
+            for (const sentence of sentences) {
+                if ((current + sentence).length > MAX) {
+                    if (current) chunks.push(current.trim());
+                    // If a single sentence is still too long, hard-split it
+                    if (sentence.length > MAX) {
+                        for (let i = 0; i < sentence.length; i += MAX) {
+                            chunks.push(sentence.slice(i, i + MAX).trim());
+                        }
+                        current = '';
+                    } else {
+                        current = sentence;
+                    }
+                } else {
+                    current += sentence;
+                }
+            }
+            if (current.trim()) chunks.push(current.trim());
+
+            // Translate each chunk sequentially to avoid rate-limiting
+            const translated = [];
+            for (const chunk of chunks) {
+                const result = await translateChunk(chunk, targetLang);
+                translated.push(result);
+            }
+
+            return translated.join(' ');
+        } catch (e) {
+            console.warn('Translation failed:', e);
+            return text;
+        }
+    }
+
     function addAssistantMessage(text, { sources = null, followupQuestions = null, isError = false } = {}) {
         const el = document.createElement('div');
         el.className = 'msg msg--assistant' + (isError ? ' is-error' : '');
@@ -527,6 +589,16 @@
                         </svg>
                         <span class="copy-btn__label">Copy</span>
                     </button>
+                    <div class="lang-switcher" role="group" aria-label="Translate answer">
+                        <button type="button" class="lang-switcher__trigger" title="Translate" aria-label="Translate answer" aria-expanded="false" aria-haspopup="true">
+                            <svg viewBox="0 0 24 24" class="lang-icon"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>
+                            <span class="lang-switcher__label">EN</span>
+                            <svg viewBox="0 0 24 24" class="lang-caret"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="lang-switcher__dropdown" role="menu">
+                            ${LANG_OPTIONS.map(l => `<button type="button" class="lang-option" data-lang="${l.code}" role="menuitem">${l.label}<span class="lang-option__full">${l.full}</span></button>`).join('')}
+                        </div>
+                    </div>
                 </div>`}
             </div>
         `;
@@ -538,13 +610,18 @@
         } else {
             answerElement.innerHTML = formatAnswerWithTimestamps(text);
 
-            // Wire up copy button
+            // Track current language and original text per message
+            let currentLang = 'en';
+            const originalText = text;
+
+            // Wire up copy button — always copies current displayed text
             const copyBtn = el.querySelector('.copy-btn');
             const copyIcon = el.querySelector('.copy-icon');
             const checkIcon = el.querySelector('.check-icon');
             const copyLabel = el.querySelector('.copy-btn__label');
             copyBtn.addEventListener('click', () => {
-                navigator.clipboard.writeText(text).then(() => {
+                const displayedText = answerElement.innerText || answerElement.textContent;
+                navigator.clipboard.writeText(displayedText).then(() => {
                     copyIcon.style.display = 'none';
                     checkIcon.style.display = '';
                     copyLabel.textContent = 'Copied!';
@@ -557,6 +634,71 @@
                     }, 2000);
                 });
             });
+
+            // Wire up language switcher
+            const langSwitcher = el.querySelector('.lang-switcher');
+            const langTrigger = el.querySelector('.lang-switcher__trigger');
+            const langDropdown = el.querySelector('.lang-switcher__dropdown');
+            const langLabel = el.querySelector('.lang-switcher__label');
+
+            // Toggle dropdown
+            langTrigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpen = langSwitcher.classList.toggle('is-open');
+                langTrigger.setAttribute('aria-expanded', String(isOpen));
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', () => {
+                if (langSwitcher.classList.contains('is-open')) {
+                    langSwitcher.classList.remove('is-open');
+                    langTrigger.setAttribute('aria-expanded', 'false');
+                }
+            }, { capture: true, passive: true });
+
+            // Handle language option selection
+            langDropdown.querySelectorAll('.lang-option').forEach(opt => {
+                opt.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const targetLang = opt.dataset.lang;
+                    if (targetLang === currentLang) {
+                        langSwitcher.classList.remove('is-open');
+                        langTrigger.setAttribute('aria-expanded', 'false');
+                        return;
+                    }
+
+                    // Mark active option
+                    langDropdown.querySelectorAll('.lang-option').forEach(o => o.classList.remove('is-active'));
+                    opt.classList.add('is-active');
+
+                    // Update trigger label
+                    const langInfo = LANG_OPTIONS.find(l => l.code === targetLang);
+                    langLabel.textContent = langInfo ? langInfo.label : targetLang.toUpperCase();
+
+                    langSwitcher.classList.remove('is-open');
+                    langTrigger.setAttribute('aria-expanded', 'false');
+
+                    // Show translating state
+                    langSwitcher.classList.add('is-translating');
+                    answerElement.style.opacity = '0.5';
+
+                    currentLang = targetLang;
+                    const translatedText = await translateText(originalText, targetLang);
+
+                    langSwitcher.classList.remove('is-translating');
+                    answerElement.style.opacity = '';
+
+                    if (targetLang === 'en') {
+                        answerElement.innerHTML = formatAnswerWithTimestamps(originalText);
+                    } else {
+                        answerElement.innerHTML = formatAnswerWithTimestamps(translatedText);
+                    }
+                });
+            });
+
+            // Mark English as default active
+            const defaultOpt = langDropdown.querySelector('[data-lang="en"]');
+            if (defaultOpt) defaultOpt.classList.add('is-active');
 
             if (followupQuestions && followupQuestions.length > 0) {
                 const msgBody = el.querySelector('.msg__body');
