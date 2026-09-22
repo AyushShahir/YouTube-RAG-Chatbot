@@ -18,6 +18,9 @@ The application also maintains conversation memory and provides **timestamp refe
 - Preserve transcript timing information
 - Process and index the transcript for question answering
 
+### Multilingual Feature
+- Translates generated answer in Hindi and Marathi
+
 ### 🧠 Retrieval-Augmented Generation
 
 The application follows a RAG pipeline:
